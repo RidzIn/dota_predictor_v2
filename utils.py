@@ -305,10 +305,10 @@ def calculate_prob_v1(pred):
 def calculate_prob_v2(pred):
     # Информация о моделях
     models_info = {
-        'KNeighborsUnif_BAG_L1': {'prob': pred['KNeighborsUnif_BAG_L1'], 'winrate': 0.678, 'mean': 0.49770, 'median': 0.49770, 'alpha': 0.05},
-        'RandomForest_r16_BAG_L1': {'prob': pred['RandomForest_r16_BAG_L1'], 'winrate': 0.62, 'mean': 0.49337, 'median': 0.495, 'alpha': 0.05},
-        'LightGBMLarge_BAG_L1': {'prob': pred['LightGBMLarge_BAG_L1'], 'winrate': 0.619, 'mean': 0.48, 'median': 0.466, 'alpha': 0.05},
-        'XGBoost_r194_BAG_L1': {'prob': pred['XGBoost_r194_BAG_L1'], 'winrate': 0.617, 'mean': 0.479, 'median': 0.476, 'alpha': 0.05},
+        'KNeighborsUnif_BAG_L1': {'prob': pred['KNeighborsUnif_BAG_L1'], 'winrate': 0.678, 'mean': 0.49770, 'alpha': 0.08},
+        'RandomForest_r16_BAG_L1': {'prob': pred['RandomForest_r16_BAG_L1'], 'winrate': 0.62, 'mean': 0.49337, 'alpha': 0.08},
+        'LightGBMLarge_BAG_L1': {'prob': pred['LightGBMLarge_BAG_L1'], 'winrate': 0.619, 'mean': 0.48, 'alpha': 0.08},
+        'XGBoost_r194_BAG_L1': {'prob': pred['XGBoost_r194_BAG_L1'], 'winrate': 0.617, 'mean': 0.479, 'alpha': 0.08},
     }
 
     total_winrate = sum(model['winrate'] for model in models_info.values())
@@ -319,7 +319,7 @@ def calculate_prob_v2(pred):
 
     radiant_probs = []
     for model in models_info.values():
-        adjusted_prob = model['prob'] + model['alpha'] * model['mean'] + model['alpha'] * model['median']
+        adjusted_prob = model['prob'] + model['alpha'] * model['mean']
         weighted_prob = adjusted_prob * model['weight']
         radiant_probs.append(weighted_prob)
 
