@@ -2,6 +2,7 @@ import json
 
 import numpy as np
 import pandas as pd
+import requests
 from autogluon.tabular import TabularPredictor
 from rich import print as pp
 
@@ -340,3 +341,33 @@ def calculate_prob_v2(pred):
         dire_prob = round(1 - radiant_prob, 2)
 
     return {'dire': dire_prob, 'radiant': radiant_prob}
+
+
+def get_meta_prediction(pick_1, pick_2):
+    """Parse data from OpenDota API and calculate win probability based on recent matches played on this
+    heroes by non-professional players"""
+    avg_winrates = {}
+    for hero in pick_1:
+        temp_df = get_hero_matchups(hero, pick_2)
+        avg_winrates[hero] = temp_df["winrate"].sum() / 5
+    team_1_win_prob = round(sum(avg_winrates.values()) / 5, 3)
+    return {"dire": team_1_win_prob, "radiant": 1 - team_1_win_prob}
+
+
+def get_hero_matchups(hero_name, pick):
+    with open('heroes_decoder.json', 'r') as file:
+        heroes_id_names = json.load(file)
+    for key, value in heroes_id_names.items():
+        if value == hero_name:
+            hero_key = key
+            break
+
+    response = requests.get(f"https://api.opendota.com/api/heroes/{hero_key}/matchups")
+
+    data = json.loads(response.text)
+    temp_df = pd.DataFrame(data)
+    temp_df["winrate"] = round(temp_df["wins"] / temp_df["games_played"], 2)
+
+    temp_df["name"] = [heroes_id_names[str(i)] for i in temp_df["hero_id"]]
+    temp_df = temp_df[temp_df["name"].isin(pick)]
+    return temp_df

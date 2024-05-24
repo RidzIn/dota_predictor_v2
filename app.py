@@ -3,7 +3,7 @@ import json
 import requests
 import streamlit as st
 
-from utils import predict_v2, calculate_prob_v2, calculate_prob_v1
+from utils import predict_v2, calculate_prob_v2, calculate_prob_v1, get_meta_prediction
 
 f = open("heroes_decoder.json")
 
@@ -84,6 +84,7 @@ with tab1:
 
             st.write('----')
 
+        st.write(get_meta_prediction(temp_dict["dire"], temp_dict['radiant']))
 
 with tab2:
         heroes = read_heroes()
@@ -160,3 +161,5 @@ with tab2:
                 st.header(f"Win probability v2: {probs_v2['radiant']}")
 
                 st.write('----')
+
+            st.write(get_meta_prediction(dire_pick, radiant_pick))
