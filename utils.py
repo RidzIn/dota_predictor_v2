@@ -143,7 +143,6 @@ def reshape_pick(pick):
     return new_hero_dict
 
 
-
 def get_feature_vec(winrates: dict, pick_1: list, pick_2: list) -> list:
     """
     Compute the complete feature vector for two Dota 2 picks based on their win rates and synergies.
@@ -167,10 +166,10 @@ def get_feature_vec(winrates: dict, pick_1: list, pick_2: list) -> list:
     )
 
     return (
-        pick_1_synergy_features
-        + pick_1_duel_features
-        + pick_2_synergy_features
-        + pick_2_duel_features
+            pick_1_synergy_features
+            + pick_1_duel_features
+            + pick_2_synergy_features
+            + pick_2_duel_features
     )
 
 
@@ -223,26 +222,19 @@ def get_duel_features(winrates: dict, pick_1: list, pick_2: list) -> tuple:
     return duel_features1, duel_features2
 
 
-
 predictor = TabularPredictor.load('AutogluonModels/production_v2')
 
 winrates = pd.read_json('updated_winrates.json')
 
 model_to_use = ['KNeighborsUnif_BAG_L1', 'RandomForest_r16_BAG_L1', 'LightGBMLarge_BAG_L1', 'XGBoost_r194_BAG_L1']
 
-# for model_name in model_to_use:
-#     model_pred = round(predictor.predict_proba(X_test_df, model=model_name)[1].iloc[0], 2)
-#     print("Prediction from %s model: %s" % (model_name, model_pred))
-
 
 def predict_v2(dire_pick, radiant_pick):
-
     result_dict = {'dire': dire_pick, 'radiant': radiant_pick}
 
-    print(dire_pick)
     dire_pick = list(reshape_pick(dire_pick).values())
     radiant_pick = list(reshape_pick(radiant_pick).values())
-    print(dire_pick)
+
     arr = np.array(get_feature_vec(winrates, pick_1=dire_pick,
                                    pick_2=radiant_pick))
 
@@ -259,9 +251,51 @@ def predict_v2(dire_pick, radiant_pick):
     return result_dict
 
 
-pick_1=['Troll Warlord', 'Windranger', 'Slardar', 'Muerta', 'Batrider']
-pick_2=['Juggernaut', 'Leshrac', 'Legion Commander', 'Gyrocopter', 'Crystal Maiden']
+def calculate_prob_v1(pred):
+    knn_prob = pred['KNeighborsUnif_BAG_L1']
+    knn_winrate = 0.678
+
+    rf_prob = pred['RandomForest_r16_BAG_L1']
+    rf_winrate = 0.62
+
+    lgb_prob = pred['LightGBMLarge_BAG_L1']
+    lgb_winrate = 0.619
+
+    xgb_prob = pred['XGBoost_r194_BAG_L1']
+    xgb_winrate = 0.617
+
+    w1 = knn_winrate / (knn_winrate + rf_winrate + lgb_winrate + xgb_winrate)
+    w2 = rf_winrate / (knn_winrate + rf_winrate + lgb_winrate + xgb_winrate)
+    w3 = lgb_winrate / (knn_winrate + rf_winrate + lgb_winrate + xgb_winrate)
+    w4 = xgb_winrate / (knn_winrate + rf_winrate + lgb_winrate + xgb_winrate)
+
+    radiant_prob = round(knn_prob * w1 + rf_prob * w2 + lgb_prob * w3 + xgb_prob * w4, 2)
+    dire_prob = round(1 - radiant_prob, 2)
+    return {'dire': dire_prob, 'radiant': radiant_prob}
 
 
-pp(predict_v2(dire_pick=pick_1, radiant_pick=pick_2))
+def calculate_prob_v2(pred):
+    models_info = {
+        'KNeighborsUnif_BAG_L1': {'prob': pred['KNeighborsUnif_BAG_L1'], 'winrate': 0.678, 'mean': 0.49770, 'median': 0.49770, 'alpha': 0.1},
+        'RandomForest_r16_BAG_L1': {'prob': pred['RandomForest_r16_BAG_L1'], 'winrate': 0.62, 'mean': 0.49337, 'median': 0.495, 'alpha': 0.1},
+        'LightGBMLarge_BAG_L1': {'prob': pred['LightGBMLarge_BAG_L1'], 'winrate': 0.619, 'mean': 0.48, 'median': 0.466, 'alpha': 0.1},
+        'XGBoost_r194_BAG_L1': {'prob': pred['XGBoost_r194_BAG_L1'], 'winrate': 0.617, 'mean': 0.479, 'median': 0.476, 'alpha': 0.1},
+    }
 
+
+    total_winrate = sum(model['winrate'] for model in models_info.values())
+
+
+    for model in models_info.values():
+        model['weight'] = model['winrate'] / total_winrate
+
+
+    radiant_prob = sum(
+        (model['prob'] + model['alpha'] * model['mean'] + model['alpha'] * model['median']) * model['weight']
+        for model in models_info.values()
+    )
+
+    radiant_prob = round(radiant_prob, 2)
+    dire_prob = round(1 - radiant_prob, 2)
+
+    return {'dire': dire_prob, 'radiant': radiant_prob}

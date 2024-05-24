@@ -3,7 +3,7 @@ import json
 import requests
 import streamlit as st
 
-from utils import predict_v2
+from utils import predict_v2, calculate_prob_v2, calculate_prob_v1
 
 f = open("heroes_decoder.json")
 
@@ -19,6 +19,7 @@ def read_heroes(file_name="heroes.txt"):
         for line in file:
             hero_set.add(line.strip())
     return hero_set
+
 
 
 def get_match_picks(match_id):
@@ -57,50 +58,32 @@ with tab1:
         pred['dire_team'] = temp_dict['dire_team']
         pred['radiant_team'] = temp_dict['radiant_team']
 
+        probs_v1 = calculate_prob_v1(pred)
+        probs_v2 = calculate_prob_v2(pred)
+
         col1, col2 = st.columns(2)
 
         with col1:
             st.title(pred['dire_team'])
-
+            st.write('**dire**')
             st.write(pred['dire_pick'])
 
-            st.write('----')
-            col1, col3 = st.columns(2)
-            with col1:
-                st.write('<h3>KNeighbors</h3>', unsafe_allow_html=True)
-                st.metric('', round(1-pred['KNeighborsUnif_BAG_L1'], 2))
-            with col3:
-                st.write('<h3>RandomForest</h3>', unsafe_allow_html=True)
-                st.metric('', round(1-pred['RandomForest_r16_BAG_L1'], 2))
+            st.header(f"Win probability v1: {probs_v1['dire']}")
+            st.header(f"Win probability v2: {probs_v2['dire']}")
 
-            col1, col3 = st.columns(2)
-            with col1:
-                st.write('<h3>LightGBM</h3>', unsafe_allow_html=True)
-                st.metric('', round(1-pred['LightGBMLarge_BAG_L1'], 2))
-            with col3:
-                st.write('<h3>XGBoost</h3>', unsafe_allow_html=True)
-                st.metric('', round(1-pred['XGBoost_r194_BAG_L1'], 2))
+            st.write('----')
+
 
         with col2:
             st.title(pred['radiant_team'])
-
+            st.write('**radiant**')
             st.write(pred['radiant_pick'])
-            st.write('----')
-            col1, col3 = st.columns(2)
-            with col1:
-                st.write('<h3>KNeighbors</h3>', unsafe_allow_html=True)
-                st.metric('', pred['KNeighborsUnif_BAG_L1'])
-            with col3:
-                st.write('<h3>RandomForest</h3>', unsafe_allow_html=True)
-                st.metric('', pred['RandomForest_r16_BAG_L1'])
 
-            col1, col3 = st.columns(2)
-            with col1:
-                st.write('<h3>LightGBM</h3>', unsafe_allow_html=True)
-                st.metric('', pred['LightGBMLarge_BAG_L1'])
-            with col3:
-                st.write('<h3>XGBoost</h3>', unsafe_allow_html=True)
-                st.metric('', pred['XGBoost_r194_BAG_L1'])
+            st.header(f"Win probability v1: {probs_v1['radiant']}")
+            st.header(f"Win probability v2: {probs_v2['radiant']}")
+
+            st.write('----')
+
 
 with tab2:
         heroes = read_heroes()
@@ -111,19 +94,19 @@ with tab2:
         dire_1, dire_2, dire_3, dire_4, dire_5 = st.columns(5)
 
         with dire_1:
-            d1 = st.selectbox("Dire Position 1", heroes)
+            d1 = st.selectbox("Dire Position 1", heroes,index=None)
 
         with dire_2:
-            d2 = st.selectbox("Dire Position 2", heroes)
+            d2 = st.selectbox("Dire Position 2", heroes,index=None)
 
         with dire_3:
-            d3 = st.selectbox("Dire Position 3", heroes)
+            d3 = st.selectbox("Dire Position 3", heroes,index=None)
 
         with dire_4:
-            d4 = st.selectbox("Dire Position 4", heroes)
+            d4 = st.selectbox("Dire Position 4", heroes,index=None)
 
         with dire_5:
-            d5 = st.selectbox("Dire Position 5", heroes)
+            d5 = st.selectbox("Dire Position 5", heroes,index=None)
 
         """
         ## \tSELECT HEROES FOR RADIANT TEAM 
@@ -132,25 +115,29 @@ with tab2:
         radiant_1, radiant_2, radiant_3, radiant_4, radiant_5 = st.columns(5)
 
         with radiant_1:
-            r1 = st.selectbox("Radiant Position 1", heroes)
+            r1 = st.selectbox("Radiant Position 1", heroes, index=None)
 
         with radiant_2:
-            r2 = st.selectbox("Radiant Position 2", heroes)
+            r2 = st.selectbox("Radiant Position 2", heroes, index=None)
 
         with radiant_3:
-            r3 = st.selectbox("Radiant Position 3", heroes)
+            r3 = st.selectbox("Radiant Position 3", heroes, index=None)
 
         with radiant_4:
-            r4 = st.selectbox("Radiant Position 4", heroes)
+            r4 = st.selectbox("Radiant Position 4", heroes, index=None)
 
         with radiant_5:
-            r5 = st.selectbox("Radiant Position 5", heroes)
+            r5 = st.selectbox("Radiant Position 5", heroes, index=None)
 
         if st.button("Predict", key=1):
             dire_pick = [d1, d2, d3, d4, d5]
             radiant_pick = [r1, r2, r3, r4, r5]
 
             pred = predict_v2(dire_pick, radiant_pick)
+
+
+            probs_v1 = calculate_prob_v1(pred)
+            probs_v2 = calculate_prob_v2(pred)
 
             col1, col2 = st.columns(2)
 
@@ -159,42 +146,17 @@ with tab2:
 
                 st.write(pred['dire_pick'])
 
-                st.write('----')
-                col1, col3 = st.columns(2)
-                with col1:
-                    st.write('<h3>KNeighbors</h3>', unsafe_allow_html=True)
-                    st.metric('', round(1 - pred['KNeighborsUnif_BAG_L1'], 2))
-                with col3:
-                    st.write('<h3>RandomForest</h3>', unsafe_allow_html=True)
-                    st.metric('', round(1 - pred['RandomForest_r16_BAG_L1'], 2))
+                st.header(f"Win probability v1: {probs_v1['dire']}")
+                st.header(f"Win probability v2: {probs_v2['dire']}")
 
-                col1, col3 = st.columns(2)
-                with col1:
-                    st.write('<h3>LightGBM</h3>', unsafe_allow_html=True)
-                    st.metric('', round(1 - pred['LightGBMLarge_BAG_L1'], 2))
-                with col3:
-                    st.write('<h3>XGBoost</h3>', unsafe_allow_html=True)
-                    st.metric('', round(1 - pred['XGBoost_r194_BAG_L1'], 2))
+                st.write('----')
 
             with col2:
-                st.title('radiant')
+                st.title('Radiant')
 
                 st.write(pred['radiant_pick'])
+
+                st.header(f"Win probability v1: {probs_v1['radiant']}")
+                st.header(f"Win probability v2: {probs_v2['radiant']}")
+
                 st.write('----')
-                col1, col3 = st.columns(2)
-                with col1:
-                    st.write('<h3>KNeighbors</h3>', unsafe_allow_html=True)
-                    st.metric('', pred['KNeighborsUnif_BAG_L1'])
-                with col3:
-                    st.write('<h3>RandomForest</h3>', unsafe_allow_html=True)
-                    st.metric('', pred['RandomForest_r16_BAG_L1'])
-
-                col1, col3 = st.columns(2)
-                with col1:
-                    st.write('<h3>LightGBM</h3>', unsafe_allow_html=True)
-                    st.metric('', pred['LightGBMLarge_BAG_L1'])
-                with col3:
-                    st.write('<h3>XGBoost</h3>', unsafe_allow_html=True)
-                    st.metric('', pred['XGBoost_r194_BAG_L1'])
-
-
