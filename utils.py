@@ -281,21 +281,23 @@ def calculate_prob_v2(pred):
         'LightGBMLarge_BAG_L1': {'prob': pred['LightGBMLarge_BAG_L1'], 'winrate': 0.619, 'mean': 0.48, 'median': 0.466, 'alpha': 0.1},
         'XGBoost_r194_BAG_L1': {'prob': pred['XGBoost_r194_BAG_L1'], 'winrate': 0.617, 'mean': 0.479, 'median': 0.476, 'alpha': 0.1},
     }
+    is_correlation_needed = calculate_prob_v1(pred)['dire'] > 0.5
+    if is_correlation_needed:
+        total_winrate = sum(model['winrate'] for model in models_info.values())
 
 
-    total_winrate = sum(model['winrate'] for model in models_info.values())
+        for model in models_info.values():
+            model['weight'] = model['winrate'] / total_winrate
 
 
-    for model in models_info.values():
-        model['weight'] = model['winrate'] / total_winrate
+        radiant_prob = sum(
+            (model['prob'] + model['alpha'] * model['mean'] + model['alpha'] * model['median']) * model['weight']
+            for model in models_info.values()
+        )
 
+        radiant_prob = round(radiant_prob, 2)
+        dire_prob = round(1 - radiant_prob, 2)
 
-    radiant_prob = sum(
-        (model['prob'] + model['alpha'] * model['mean'] + model['alpha'] * model['median']) * model['weight']
-        for model in models_info.values()
-    )
-
-    radiant_prob = round(radiant_prob, 2)
-    dire_prob = round(1 - radiant_prob, 2)
-
-    return {'dire': dire_prob, 'radiant': radiant_prob}
+        return {'dire': dire_prob, 'radiant': radiant_prob}
+    else:
+        return calculate_prob_v1(pred)

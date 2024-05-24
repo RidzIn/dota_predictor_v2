@@ -58,7 +58,7 @@ with tab1:
         pred['dire_team'] = temp_dict['dire_team']
         pred['radiant_team'] = temp_dict['radiant_team']
 
-        probs_v1 = calculate_prob_v1(pred)
+        # probs_v1 = calculate_prob_v1(pred)
         probs_v2 = calculate_prob_v2(pred)
 
         col1, col2 = st.columns(2)
@@ -68,7 +68,7 @@ with tab1:
             st.write('**dire**')
             st.write(pred['dire_pick'])
 
-            st.header(f"Win probability v1: {probs_v1['dire']}")
+            # st.header(f"Win probability v1: {probs_v1['dire']}")
             st.header(f"Win probability v2: {probs_v2['dire']}")
 
             st.write('----')
@@ -79,7 +79,7 @@ with tab1:
             st.write('**radiant**')
             st.write(pred['radiant_pick'])
 
-            st.header(f"Win probability v1: {probs_v1['radiant']}")
+            # st.header(f"Win probability v1: {probs_v1['radiant']}")
             st.header(f"Win probability v2: {probs_v2['radiant']}")
 
             st.write('----')
@@ -136,7 +136,7 @@ with tab2:
             pred = predict_v2(dire_pick, radiant_pick)
 
 
-            probs_v1 = calculate_prob_v1(pred)
+            # probs_v1 = calculate_prob_v1(pred)
             probs_v2 = calculate_prob_v2(pred)
 
             col1, col2 = st.columns(2)
@@ -146,7 +146,7 @@ with tab2:
 
                 st.write(pred['dire_pick'])
 
-                st.header(f"Win probability v1: {probs_v1['dire']}")
+                # st.header(f"Win probability v1: {probs_v1['dire']}")
                 st.header(f"Win probability v2: {probs_v2['dire']}")
 
                 st.write('----')
@@ -156,7 +156,7 @@ with tab2:
 
                 st.write(pred['radiant_pick'])
 
-                st.header(f"Win probability v1: {probs_v1['radiant']}")
+                # st.header(f"Win probability v1: {probs_v1['radiant']}")
                 st.header(f"Win probability v2: {probs_v2['radiant']}")
 
                 st.write('----')
