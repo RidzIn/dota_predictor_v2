@@ -1,5 +1,6 @@
 import json
 
+import joblib
 import numpy as np
 import pandas as pd
 import requests
@@ -223,11 +224,11 @@ def get_duel_features(winrates: dict, pick_1: list, pick_2: list) -> tuple:
     return duel_features1, duel_features2
 
 
-predictor = TabularPredictor.load('AutogluonModels/production_v2')
+predictor = TabularPredictor.load('AutogluonModels/prod_v3')
 
-winrates = pd.read_json('updated_winrates.json')
+winrates = pd.read_json('winrates.json')
 
-model_to_use = ['KNeighborsUnif_BAG_L1', 'RandomForest_r16_BAG_L1', 'LightGBMLarge_BAG_L1', 'XGBoost_r194_BAG_L1']
+model_to_use = ['CatBoost_r167_BAG_L1', 'ExtraTrees_r197_BAG_L1', 'LightGBM_r42_BAG_L1', 'XGBoost_r89_BAG_L1']
 
 
 def predict_v2(dire_pick, radiant_pick):
@@ -236,12 +237,17 @@ def predict_v2(dire_pick, radiant_pick):
     dire_pick = list(reshape_pick(dire_pick).values())
     radiant_pick = list(reshape_pick(radiant_pick).values())
 
+
     arr = np.array(get_feature_vec(winrates, pick_1=dire_pick,
                                    pick_2=radiant_pick))
 
-    arr = arr.reshape(1, -1)
+    result_dict['dire_simple'] = round(sum(arr[:40]) / 40, 2)
+    result_dict['radiant_simple'] = round(sum(arr[40:]) / 40, 2)
 
-    Features_df = pd.DataFrame(arr, columns=[f'Feature_{i + 1}' for i in range(80)])
+    arr = np.insert(arr, 0, 0)
+
+    arr = arr.reshape(1, -1)
+    Features_df = pd.DataFrame(arr, columns=['col_0']+[f'Feature_{i + 1}' for i in range(80)])
 
     for model_name in model_to_use:
         model_pred = round(predictor.predict_proba(Features_df, model=model_name)[1].iloc[0], 2)
@@ -252,18 +258,33 @@ def predict_v2(dire_pick, radiant_pick):
     return result_dict
 
 
+calibrated_models = {
+    'CatBoost_r167_BAG_L1': joblib.load('CatBoost_r167_BAG_L1_calibrated_model.pkl'),
+    'ExtraTrees_r197_BAG_L1': joblib.load('ExtraTrees_r197_BAG_L1_calibrated_model.pkl'),
+    'LightGBM_r42_BAG_L1': joblib.load('LightGBM_r42_BAG_L1_calibrated_model.pkl'),
+    'XGBoost_r89_BAG_L1': joblib.load('XGBoost_r89_BAG_L1_calibrated_model.pkl')
+}
+
+
 def calculate_prob_v1(pred):
-    knn_prob = pred['KNeighborsUnif_BAG_L1']
-    knn_winrate = 0.678
 
-    rf_prob = pred['RandomForest_r16_BAG_L1']
-    rf_winrate = 0.62
+    knn_prob = calibrated_models['CatBoost_r167_BAG_L1'].predict_proba([[pred['CatBoost_r167_BAG_L1']]])[0, 1]
+    knn_winrate = 0.564
 
-    lgb_prob = pred['LightGBMLarge_BAG_L1']
-    lgb_winrate = 0.619
 
-    xgb_prob = pred['XGBoost_r194_BAG_L1']
-    xgb_winrate = 0.617
+    rf_prob = calibrated_models['ExtraTrees_r197_BAG_L1'].predict_proba([[pred['ExtraTrees_r197_BAG_L1']]])[0, 1]
+    rf_winrate = 0.569
+
+
+
+    lgb_prob = calibrated_models['LightGBM_r42_BAG_L1'].predict_proba([[pred['LightGBM_r42_BAG_L1']]])[0, 1]
+    lgb_winrate = 0.558
+
+
+
+    xgb_prob = calibrated_models['XGBoost_r89_BAG_L1'].predict_proba([[pred['XGBoost_r89_BAG_L1']]])[0, 1]
+    xgb_winrate = 0.562
+
 
     w1 = knn_winrate / (knn_winrate + rf_winrate + lgb_winrate + xgb_winrate)
     w2 = rf_winrate / (knn_winrate + rf_winrate + lgb_winrate + xgb_winrate)
@@ -275,72 +296,32 @@ def calculate_prob_v1(pred):
     return {'dire': dire_prob, 'radiant': radiant_prob}
 
 
-# def calculate_prob_v2(pred):
-#     models_info = {
-#         'KNeighborsUnif_BAG_L1': {'prob': pred['KNeighborsUnif_BAG_L1'], 'winrate': 0.678, 'mean': 0.49770, 'median': 0.49770, 'alpha': 0.1},
-#         'RandomForest_r16_BAG_L1': {'prob': pred['RandomForest_r16_BAG_L1'], 'winrate': 0.62, 'mean': 0.49337, 'median': 0.495, 'alpha': 0.1},
-#         'LightGBMLarge_BAG_L1': {'prob': pred['LightGBMLarge_BAG_L1'], 'winrate': 0.619, 'mean': 0.48, 'median': 0.466, 'alpha': 0.1},
-#         'XGBoost_r194_BAG_L1': {'prob': pred['XGBoost_r194_BAG_L1'], 'winrate': 0.617, 'mean': 0.479, 'median': 0.476, 'alpha': 0.1},
-#     }
-#     is_correlation_needed = calculate_prob_v1(pred)['dire'] > 0.5
-#     if is_correlation_needed:
-#         total_winrate = sum(model['winrate'] for model in models_info.values())
-#
-#
-#         for model in models_info.values():
-#             model['weight'] = model['winrate'] / total_winrate
-#
-#
-#         radiant_prob = sum(
-#             (model['prob'] + model['alpha'] * model['mean'] + model['alpha'] * model['median']) * model['weight']
-#             for model in models_info.values()
-#         )
-#
-#         radiant_prob = round(radiant_prob, 2)
-#         dire_prob = round(1 - radiant_prob, 2)
-#
-#         return {'dire': dire_prob, 'radiant': radiant_prob}
-#     else:
-#         return calculate_prob_v1(pred)
-
 def calculate_prob_v2(pred):
-    # Информация о моделях
-    models_info = {
-        'KNeighborsUnif_BAG_L1': {'prob': pred['KNeighborsUnif_BAG_L1'], 'winrate': 0.678, 'mean': 0.49770, 'alpha': 0.08},
-        'RandomForest_r16_BAG_L1': {'prob': pred['RandomForest_r16_BAG_L1'], 'winrate': 0.62, 'mean': 0.49337, 'alpha': 0.08},
-        'LightGBMLarge_BAG_L1': {'prob': pred['LightGBMLarge_BAG_L1'], 'winrate': 0.619, 'mean': 0.48, 'alpha': 0.08},
-        'XGBoost_r194_BAG_L1': {'prob': pred['XGBoost_r194_BAG_L1'], 'winrate': 0.617, 'mean': 0.479, 'alpha': 0.08},
-    }
+    knn_prob = pred['CatBoost_r167_BAG_L1']
 
-    total_winrate = sum(model['winrate'] for model in models_info.values())
+    knn_winrate = 0.564
 
-    for model in models_info.values():
-        model['weight'] = model['winrate'] / total_winrate
+    rf_prob = pred['ExtraTrees_r197_BAG_L1']
+    rf_winrate = 0.569
 
 
-    radiant_probs = []
-    for model in models_info.values():
-        adjusted_prob = model['prob'] + model['alpha'] * model['mean']
-        weighted_prob = adjusted_prob * model['weight']
-        radiant_probs.append(weighted_prob)
+
+    lgb_prob = pred['LightGBM_r42_BAG_L1']
+    lgb_winrate = 0.558
 
 
-    radiant_prob = round(sum(radiant_probs), 2)
+    xgb_prob = pred['XGBoost_r89_BAG_L1']
+    xgb_winrate = 0.562
+
+    w1 = knn_winrate / (knn_winrate + rf_winrate + lgb_winrate + xgb_winrate)
+    w2 = rf_winrate / (knn_winrate + rf_winrate + lgb_winrate + xgb_winrate)
+    w3 = lgb_winrate / (knn_winrate + rf_winrate + lgb_winrate + xgb_winrate)
+    w4 = xgb_winrate / (knn_winrate + rf_winrate + lgb_winrate + xgb_winrate)
+
+    radiant_prob = round(knn_prob * w1 + rf_prob * w2 + lgb_prob * w3 + xgb_prob * w4, 2)
     dire_prob = round(1 - radiant_prob, 2)
-
-
-    if radiant_prob < 0.5:
-        correction_factor = 1 + (0.5 - radiant_prob)
-        radiant_prob *= correction_factor
-        radiant_prob = round(radiant_prob, 2)
-        dire_prob = round(1 - radiant_prob, 2)
-    elif radiant_prob > 0.5:
-        correction_factor = 1 - (radiant_prob - 0.5)
-        radiant_prob *= correction_factor
-        radiant_prob = round(radiant_prob, 2)
-        dire_prob = round(1 - radiant_prob, 2)
-
     return {'dire': dire_prob, 'radiant': radiant_prob}
+
 
 
 def get_meta_prediction(pick_1, pick_2):
