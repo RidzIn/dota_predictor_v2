@@ -3,14 +3,15 @@ import json
 import requests
 import streamlit as st
 
-from utils import predict_v2, calculate_prob_v2, calculate_prob_v1, get_meta_prediction
+from utils import predict, get_meta_prediction, predict_dict
 
-f = open("heroes_decoder.json")
+f = open("data/heroes_decoder.json")
 
 heroes_id_names = json.load(f)
 
 
-def read_heroes(file_name="heroes.txt"):
+
+def read_heroes(file_name="data/heroes.txt"):
     """
     Take txt file of heroes and return set object
     """
@@ -24,7 +25,8 @@ def read_heroes(file_name="heroes.txt"):
 
 def get_match_picks(match_id):
     response = requests.get(f'https://api.opendota.com/api/matches/{match_id}')
-
+    if 'Internal Server Error' in response.text:
+        raise ValueError("Open Dota crushed, refresh the page and try Test Yourself page")
     radiant_picks = [pick["hero_id"] for pick in response.json()['picks_bans'] if pick["is_pick"] and pick["team"] == 0]
     dire_picks = [pick["hero_id"] for pick in response.json()['picks_bans'] if pick["is_pick"] and pick["team"] == 1]
 
@@ -46,54 +48,30 @@ def get_match_picks(match_id):
             "dire_team": response.json()['dire_team']['name'], 'radiant_team': response.json()['radiant_team']['name']}
 
 
-def display_results(dire_team, dire_pick, radiant_team, radiant_pick, probs_v2, pred):
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.title(dire_team)
-        st.write('**dire**')
-        st.write(dire_pick)
-
-    with col2:
-        st.title(radiant_team)
-        st.write('**radiant**')
-        st.write(radiant_pick)
-
-    st.write('----')
+def display_results(dire_pick, radiant_pick, pred):
 
     col1, col2 = st.columns(2)
-
     with col1:
-        st.header(f"Win probability ML")
-        st.metric("", probs_v2['dire'])
+        if pred['pick'] == 'unpredicted':
+            st.header('unpredicted')
+        else:
+            if pred['team']:
+                st.header(pred['team'])
 
+            st.write(pred['side'])
+            st.write(pred['pick'])
     with col2:
-        st.header(f"Win probability ML")
-        st.metric("", probs_v2['radiant'])
-
-
-    st.write('----')
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.header(f"Winrates summary")
-        st.metric("", pred['dire_simple'])
-
-    with col2:
-        st.header(f"Winrates summary")
-        st.metric("", pred['radiant_simple'])
-
+        st.write(predict_dict(dire_pick, radiant_pick))
     st.write('----')
 
     col1, col2 = st.columns(2)
 
     temp = get_meta_prediction(dire_pick, radiant_pick)
     with col1:
-        st.header("Meta")
+        st.header("Dire Meta")
         st.metric('', temp['dire'])
     with col2:
-        st.header("Meta")
+        st.header("Radiant Meta")
         st.metric("", temp['radiant'])
 
     st.write('----')
@@ -107,13 +85,14 @@ with tab1:
     if st.button("Predict", key=2):
         temp_dict = get_match_picks(int(match_id))
 
-        pred = predict_v2(temp_dict["dire"], temp_dict["radiant"])
-        pred['dire_team'] = temp_dict['dire_team']
-        pred['radiant_team'] = temp_dict['radiant_team']
+        pred = predict(temp_dict["dire"], temp_dict["radiant"])
+        if pred['side'] == 'dire':
+            pred['team'] = temp_dict['dire_team']
+        if pred['side'] == 'radiant':
+            pred['team'] = temp_dict['radiant_team']
 
-        calibrated = calculate_prob_v1(pred)
+        display_results(temp_dict["dire"], temp_dict["radiant"], pred)
 
-        display_results(pred['dire_team'], pred['dire_pick'], pred['radiant_team'], pred['radiant_pick'], calibrated, pred)
 
 with tab2:
     heroes = read_heroes()
@@ -163,8 +142,7 @@ with tab2:
         dire_pick = [d1, d2, d3, d4, d5]
         radiant_pick = [r1, r2, r3, r4, r5]
 
-        pred = predict_v2(dire_pick, radiant_pick)
+        pred = predict(dire_pick, radiant_pick)
 
-        probs_v2 = calculate_prob_v2(pred)
+        display_results(dire_pick, radiant_pick, pred)
 
-        display_results('Dire', dire_pick, 'Radiant', radiant_pick, probs_v2, pred)
