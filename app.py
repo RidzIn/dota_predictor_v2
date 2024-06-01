@@ -1,78 +1,36 @@
-import json
-
-import requests
 import streamlit as st
-
-from utils import predict, get_meta_prediction, predict_dict
-
-f = open("data/heroes_decoder.json")
-
-heroes_id_names = json.load(f)
-
-
-
-def read_heroes(file_name="data/heroes.txt"):
-    """
-    Take txt file of heroes and return set object
-    """
-    hero_set = set()
-    with open(file_name, "r") as file:
-        for line in file:
-            hero_set.add(line.strip())
-    return hero_set
-
-
-
-def get_match_picks(match_id):
-    response = requests.get(f'https://api.opendota.com/api/matches/{match_id}')
-    if 'Internal Server Error' in response.text:
-        raise ValueError("Open Dota crushed, refresh the page and try Test Yourself page")
-    radiant_picks = [pick["hero_id"] for pick in response.json()['picks_bans'] if pick["is_pick"] and pick["team"] == 0]
-    dire_picks = [pick["hero_id"] for pick in response.json()['picks_bans'] if pick["is_pick"] and pick["team"] == 1]
-
-    radiant_picks_decode = []
-    dire_picks_decode = []
-    for id in radiant_picks:
-        for key, value in heroes_id_names.items():
-            if int(key) == int(id):
-                radiant_picks_decode.append(value)
-                break
-
-    for id in dire_picks:
-        for key, value in heroes_id_names.items():
-            if int(key) == int(id):
-                dire_picks_decode.append(value)
-                break
-
-    return {"dire": dire_picks_decode, 'radiant': radiant_picks_decode,
-            "dire_team": response.json()['dire_team']['name'], 'radiant_team': response.json()['radiant_team']['name']}
+from predict import predict_dict, get_meta_prediction, predict
+from utils import get_match_picks, read_heroes
 
 
 def display_results(dire_pick, radiant_pick, pred):
+    col1, col2 = st.columns(2)
+    if 'error' in pred['info'].keys():
+        st.header('unpredicted')
+        st.write('----')
+    else:
+        with col1:
+            if pred['is_predicted']:
+                if 'team' in pred['info'].keys():
+                    st.header(pred['info']['team'])
+                st.write(pred['info']['predicted_side'])
+                st.write(pred['info']['predicted_pick'])
+            else:
+                st.header('unpredicted')
+
+        with col2:
+            st.write(pred['info'])
+        st.write('----')
 
     col1, col2 = st.columns(2)
-    with col1:
-        if pred['pick'] == 'unpredicted':
-            st.header('unpredicted')
-        else:
-            if 'team' in pred.keys():
-                st.header(pred['team'])
 
-            st.write(pred['side'])
-            st.write(pred['pick'])
-    with col2:
-        st.write(predict_dict(dire_pick, radiant_pick))
-    st.write('----')
-
-    col1, col2 = st.columns(2)
-
-    temp = get_meta_prediction(dire_pick, radiant_pick)
+    meta = get_meta_prediction(dire_pick, radiant_pick)
     with col1:
         st.header("Dire Meta")
-        st.metric('', temp['dire'])
+        st.metric('', meta['dire'])
     with col2:
         st.header("Radiant Meta")
-        st.metric("", temp['radiant'])
+        st.metric("", meta['radiant'])
 
     st.write('----')
 
@@ -86,13 +44,13 @@ with tab1:
         temp_dict = get_match_picks(int(match_id))
 
         pred = predict(temp_dict["dire"], temp_dict["radiant"])
-        if pred['side'] == 'dire':
-            pred['team'] = temp_dict['dire_team']
-        if pred['side'] == 'radiant':
-            pred['team'] = temp_dict['radiant_team']
+        if pred['info']['predicted_side'] == 'dire':
+            pred['info']['team'] = temp_dict['dire_team']
+
+        if pred['info']['predicted_side'] == 'radiant':
+            pred['info']['team'] = temp_dict['radiant_team']
 
         display_results(temp_dict["dire"], temp_dict["radiant"], pred)
-
 
 with tab2:
     heroes = read_heroes()
@@ -145,4 +103,3 @@ with tab2:
         pred = predict(dire_pick, radiant_pick)
 
         display_results(dire_pick, radiant_pick, pred)
-

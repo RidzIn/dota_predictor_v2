@@ -200,44 +200,6 @@ def update_models_feedback(df, winrates, model_1='ExtraTrees_r49_BAG_L1', model_
     )
 
 
-def get_row_prediction(winrates, dire_pick, radiant_pick, model):
-    """Return model's prediction without any additional checkers"""
-
-    arr = np.array(get_feature_vec(winrates, dire=dire_pick, radiant=radiant_pick)).reshape(1, -1)
-    Features_df = pd.DataFrame(arr, columns=[f'Feature_{i + 1}' for i in range(80)])
-    prediction = predictor.predict_proba(Features_df, model=model)
-
-    return {'dire': prediction[0].iloc[0], 'radiant': prediction[1].iloc[0]}
-
-
-def get_feedback_prediction(winrates, feedback, dire_pick, radiant_pick, model):
-    prediction = get_row_prediction(winrates, dire_pick, radiant_pick, model)
-
-    if prediction["dire"] > prediction["radiant"]:
-        predicted_pick = dire_pick
-        unpredicted_pick = radiant_pick
-        predicted_side = 'dire'
-        unpredicted_side = 'radiant',
-        model_pred = prediction['dire']
-    else:
-        predicted_pick = radiant_pick
-        unpredicted_pick = dire_pick
-        predicted_side = 'radiant'
-        unpredicted_side = 'dire'
-        model_pred = prediction['radiant']
-
-    predicted_winrate = sum(feedback[hero]["predicted_winrate"] for hero in predicted_pick) / 5
-    unpredicted_winrate = sum(feedback[hero]["unpredicted_winrate"] for hero in unpredicted_pick) / 5
-
-    return {
-        'predicted_winrate': round(predicted_winrate, 3),
-        'unpredicted_winrate': round(unpredicted_winrate, 3),
-        'predicted_side': predicted_side,
-        'unpredicted_side': unpredicted_side,
-        'model_pred': model_pred,
-    }
-
-
 # tier_2 = pd.read_pickle('data/tier2.pkl')
 #
 #

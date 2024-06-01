@@ -1,14 +1,12 @@
 import json
-
-import joblib
-import numpy as np
 import pandas as pd
 import requests
-from autogluon.tabular import TabularPredictor
-from rich import print as pp
 
 
-hero_prior = pd.read_excel('data/heroes_prior.xlsx')
+hero_prior = pd.read_excel('data/util_data/heroes_prior.xlsx')
+
+f = open("data/util_data/heroes_decoder.json")
+heroes_id_names = json.load(f)
 
 
 def pos_reshape(pick):
@@ -129,71 +127,7 @@ def get_duel_features(winrates, pick_1: list, pick_2: list) -> tuple:
     return duel_features1, duel_features2
 
 
-predictor = TabularPredictor.load('AutogluonModels/production')
-
-winrates = pd.read_json('data/winrates.json')
-
-model_to_use = ['ExtraTrees_r49_BAG_L1', 'RandomForest_r16_BAG_L1']
-
-rf_feedback = pd.read_json('data/rf_stat.json')
-
-ext_feedback = pd.read_json('data/extra_tree_stat.json')
-
-EXT_PREDICTED_MEAN = 0.54
-EXT_UNPREDICTED_MEAN = 0.46
-
-
-def predict_dict(dire_pick, radiant_pick):
-    from feedbacks import get_feedback_prediction
-
-    result_dict = {}
-
-    dire_pick = pos_reshape(dire_pick)
-    radiant_pick = pos_reshape(radiant_pick)
-
-    rf_f = get_feedback_prediction(winrates, rf_feedback, dire_pick, radiant_pick, 'RandomForest_r16_BAG_L1')
-    ext_f = get_feedback_prediction(winrates, ext_feedback, dire_pick, radiant_pick, 'ExtraTrees_r49_BAG_L1')
-
-    if rf_f['predicted_side'] == 'dire' and ext_f['predicted_side'] == 'dire':
-        result_dict['predicted_side'] = 'dire'
-        result_dict['predicted_pick'] = dire_pick
-    elif rf_f['predicted_side'] == 'radiant' and ext_f['predicted_side'] == 'radiant':
-        result_dict['predicted_side'] = 'radiant'
-        result_dict['predicted_pick'] = radiant_pick
-    else:
-        raise ValueError("Unpredicted")
-
-    result_dict['predicted_winrate'] = (rf_f['predicted_winrate'] + ext_f['predicted_winrate']) / 2
-    result_dict['unpredicted_winrate'] = (rf_f['unpredicted_winrate'] + ext_f['unpredicted_winrate']) / 2
-    result_dict['model_pred'] = (rf_f['model_pred'] + ext_f['model_pred']) / 2
-    print(result_dict)
-    return result_dict
-
-
-def predict(dire_pick, radiant_pick):
-    pred_dict = predict_dict(dire_pick, radiant_pick)
-
-    if pred_dict['predicted_winrate'] >= 0.53 and pred_dict['model_pred'] >= 0.55 and pred_dict['unpredicted_winrate'] <= 0.47:
-        return {'pick': pred_dict['predicted_pick'], 'side': pred_dict['predicted_side']}
-    else:
-        return {'pick': 'unpredicted', 'side': 'unpredicted'}
-
-
-
-def get_meta_prediction(pick_1, pick_2):
-    """Parse data from OpenDota API and calculate win probability based on recent matches played on this
-    heroes by non-professional players"""
-    avg_winrates = {}
-    for hero in pick_1:
-        temp_df = get_hero_matchups(hero, pick_2)
-        avg_winrates[hero] = temp_df["winrate"].sum() / 5
-    team_1_win_prob = round(sum(avg_winrates.values()) / 5, 3)
-    return {"dire": team_1_win_prob, "radiant": 1 - team_1_win_prob}
-
-
 def get_hero_matchups(hero_name, pick):
-    with open('data/heroes_decoder.json', 'r') as file:
-        heroes_id_names = json.load(file)
     for key, value in heroes_id_names.items():
         if value == hero_name:
             hero_key = key
@@ -231,4 +165,41 @@ def get_features_from_dataframe(dataframe, winrates):
 
     df['Label'] = dataframe['Label']
     return df
+
+
+def read_heroes(file_name="data/util_data/heroes.txt"):
+    """
+    Take txt file of heroes and return set object
+    """
+    hero_set = set()
+    with open(file_name, "r") as file:
+        for line in file:
+            hero_set.add(line.strip())
+    return hero_set
+
+
+
+def get_match_picks(match_id):
+    response = requests.get(f'https://api.opendota.com/api/matches/{match_id}')
+    if 'Internal Server Error' in response.text:
+        raise ValueError("Open Dota crushed, refresh the page and try Test Yourself page")
+    radiant_picks = [pick["hero_id"] for pick in response.json()['picks_bans'] if pick["is_pick"] and pick["team"] == 0]
+    dire_picks = [pick["hero_id"] for pick in response.json()['picks_bans'] if pick["is_pick"] and pick["team"] == 1]
+
+    radiant_picks_decode = []
+    dire_picks_decode = []
+    for id in radiant_picks:
+        for key, value in heroes_id_names.items():
+            if int(key) == int(id):
+                radiant_picks_decode.append(value)
+                break
+
+    for id in dire_picks:
+        for key, value in heroes_id_names.items():
+            if int(key) == int(id):
+                dire_picks_decode.append(value)
+                break
+
+    return {"dire": dire_picks_decode, 'radiant': radiant_picks_decode,
+            "dire_team": response.json()['dire_team']['name'], 'radiant_team': response.json()['radiant_team']['name']}
 
