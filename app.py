@@ -55,7 +55,7 @@ def display_results(dire_pick, radiant_pick, pred):
         if pred['pick'] == 'unpredicted':
             st.header('unpredicted')
         else:
-            if pred['team']:
+            if 'team' in pred.keys():
                 st.header(pred['team'])
 
             st.write(pred['side'])
