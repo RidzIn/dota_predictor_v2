@@ -8,3 +8,4 @@ xgboost==2.0.3
 catboost==1.2.5
 joblib~=1.4.2
 rich~=13.7.1
+openpyxl==3.1.2

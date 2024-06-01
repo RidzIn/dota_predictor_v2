@@ -1,5 +1,5 @@
 import streamlit as st
-from predict import predict_dict, get_meta_prediction, predict
+from predict import get_meta_prediction, predict
 from utils import get_match_picks, read_heroes
 
 
